@@ -1,0 +1,409 @@
+<!DOCTYPE HTML>
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=ISO-8859-1">
+<title>Conway&apos;s Life</title>
+
+<link type="text/css" rel="stylesheet" href="jquery-ui-1.8.21.custom.css" /> 
+<link type="text/css" rel="stylesheet" href="jquery.miniColors.css" />
+
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/1.7.2/jquery.min.js"></script>
+<script src="https://ajax.googleapis.com/ajax/libs/jqueryui/1.8.18/jquery-ui.min.js"></script>
+
+<script type="text/javascript" src="jquery.miniColors.js"></script>
+<script type="text/javascript" src="lifeapp.js"></script>
+
+<script src="modernizr.js"></script>
+
+<script type="text/javascript">
+	// some convenient constans
+	const GAME_CANVAS_WIDTH = 1600;
+	const GAME_CANVAS_HEIGHT = 1200;
+	const GAME_CANVAS_MARGIN = 0;
+
+	const CELL_SIZE = 10;
+	
+	const CELL_BOARD_WIDTH = parseInt(GAME_CANVAS_WIDTH / CELL_SIZE); 
+	const CELL_BOARD_HEIGHT = parseInt((GAME_CANVAS_HEIGHT - GAME_CANVAS_MARGIN) / CELL_SIZE);
+	
+	var interval_times = [3, 8, 12, 24, 48];
+	var interval_labels = ["Snail", "Turtle", "Squirrel", "Bear", "Cheetah"]
+	
+	function FrameRateCounter(fps) {
+		if (fps == undefined) {
+			this.fps = 40;
+		}	else {
+			this.fps = fps;
+		}
+		
+		this.lastFrameCount = 0;
+		var dateTemp = new Date();
+		this.frameLast = dateTemp.getTime();
+		this.frameCtr = 0;
+		this.lastTime = dateTemp.getTime();
+		
+		this.step = 1;
+		delete dateTemp;
+	}
+	
+	FrameRateCounter.prototype.countFrames = function() {
+		
+		var dateTemp = new Date();
+		var timeDifference = dateTemp.getTime()-this.lastTime;
+		this.step = (timeDifference/1000)*this.fps;
+		this.lastTime = dateTemp.getTime();
+		this.frameCtr++;
+		
+		if (dateTemp.getTime() >= this.frameLast+1000) {
+			this.lastFrameCount = this.frameCtr;
+			this.frameCtr = 0;
+			this.frameLast = dateTemp.getTime();
+		}
+		
+		delete dateTemp;
+	}
+	
+	window.addEventListener('load', eventWindowLoaded, false);
+
+	function canvasSupport () {
+		return Modernizr.canvas;
+	}	
+	
+	function eventWindowLoaded() {
+
+		var running = false;
+		
+		const FRAME_RATE = 8;
+		var intervalTime = 1000/FRAME_RATE;
+		
+		var canvas = $('<canvas/>').attr({width: GAME_CANVAS_WIDTH, height: GAME_CANVAS_HEIGHT}).appendTo('#canvas-div');
+		
+		var life = new LifeApp.life (
+				canvas,
+				{
+					canvas_width:GAME_CANVAS_WIDTH, 
+					canvas_height:GAME_CANVAS_HEIGHT, 
+					board_width:CELL_BOARD_WIDTH, 
+					board_height:CELL_BOARD_HEIGHT, 
+					margin:GAME_CANVAS_MARGIN
+				});
+
+		var frameRateCounter = new FrameRateCounter(FRAME_RATE);
+
+		function loop(show_fps) {
+			life.update();
+			life.draw();
+			
+			if( show_fps ) {
+				frameRateCounter.countFrames();
+				$('#fps').html('FPS: ' + frameRateCounter.lastFrameCount);
+			}
+			
+			if( running ) {
+				var generation = life.getGenerationCount();
+				var population = life.getPopulationCount();
+				
+				$('#tooltip').html('Generation: ' + generation + '<br />Population: ' + population);
+			}
+		}
+
+		if (!canvasSupport()) {
+			return;
+		} 
+		
+		var interval = setInterval(function() {loop(true);}, intervalTime);
+		
+		$("#radio").buttonset();
+		$('#run-button').button();
+		$('#singlestep-button').button();
+		$('#reset-button').button();
+		$('#savepattern-button').button();
+		$('#loadpattern-button').button();
+
+		$("#slider").slider();		
+		
+		$('#reset-button').bind('click', function(e) {
+			life.reset();
+		});
+
+		$('#singlestep-button').bind('click', function(e) {
+			life.singleStep();
+		});
+
+		$('#run-button').bind('click', function(e) {
+			
+			if( $('#run-button').button('option', 'label') == 'Pause' ) {
+				
+				$('#run-button').button('option', 'label', 'Run');
+				$('#singlestep-button').button('option', 'disabled', false);
+				$('#reset-button').button('option', 'disabled', false);
+				$('#savepattern-button').button('option', 'disabled', false);
+				$('#loadpattern-button').button('option', 'disabled', false);
+
+				running = false;
+				life.pause();
+				
+			} else {
+				
+				$('#run-button').button('option', 'label', 'Pause');
+				$('#singlestep-button').button('option', 'disabled', true);
+				$('#reset-button').button('option', 'disabled', true);
+				$('#savepattern-button').button('option', 'disabled', true);
+				$('#loadpattern-button').button('option', 'disabled', true);
+
+				running = true;
+				life.run();
+			}
+		});		
+		
+		$( "#slider" ).slider({
+			   change: function(event, ui) {
+				   
+				   clearInterval(interval);
+				   
+				   var sliderIndex = parseInt($( "#slider" ).slider( "option", "value" ));
+				   
+				   intervalTime = 1000/interval_times[sliderIndex];
+
+				   interval = setInterval(function() { loop(true); }, intervalTime);
+				   
+				   frameRateCounter.fps = interval_times[sliderIndex];
+				   
+				   $('#speed').html(interval_labels[sliderIndex]);
+				}
+		});		
+		
+		$("#slider").slider('option', {min:0, max:4, step:1, value:1});
+		
+		$(".color-picker").miniColors({
+			letterCase: 'uppercase',
+			change: function(hex, rgb) {
+				
+				if( $(this).attr('name') == 'cell-color' ) {
+					life.option('cell_color', $(this).val());
+				} else if($(this).attr('name') == 'grid-color') {
+					life.option('grid_color', $(this).val());
+				} else if($(this).attr('name') == 'background-color') {
+					life.option('background', $(this).val());
+				}
+
+			}
+		});
+		
+		var lastmousemove_mouse = { mx: 0, my: 0 };
+		var mousebutton = 0;
+		var mousedown = false;
+		
+		function setCellAtMouse() {
+			if(mousebutton != 0) {
+				var cellInfo = life.getCellInfoFromScreen(lastmousemove_mouse.mx, lastmousemove_mouse.my);
+				if( cellInfo ) {
+					var draw = true;
+					
+					if (mousebutton === 3) {
+						draw = false;
+					}
+					
+					cellInfo.cell.state = (draw ? LifeApp.CellStateEnum.ALIVE : LifeApp.CellStateEnum.DEAD);
+					loop(false);
+				}
+			}
+		}
+		
+		/* return the mouse position inside ctx */
+		function getMouse(e, ctx) {
+			var element = ctx, offsetX = 0, offsetY = 0;
+		
+			if (element.offsetParent !== undefined) {
+				
+		   	do {
+		      	offsetX += element.offsetLeft;
+					offsetY += element.offsetTop;
+				} while ((element = element.offsetParent));
+			}
+		
+			return { mx: e.pageX - offsetX, my: e.pageY - offsetY }; 
+		}
+		
+		canvas.bind('mousemove', function(e) {
+			e = e || window.event; //window.event for IE
+			
+			lastmousemove_mouse = getMouse(e, this);
+			mousebutton = e.which;
+
+			if( !life.isPlaying() ) {
+				setCellAtMouse();
+
+				var cellInfo = life.getCellInfoFromScreen(lastmousemove_mouse.mx, lastmousemove_mouse.my);
+				if( cellInfo ) {
+					$('#tooltip').html('Info for Cell @ [' + cellInfo.x + ', ' + cellInfo.y + ']<br />State: ' + (cellInfo.cell.state == LifeApp.CellStateEnum.ALIVE ? 'Alive' : 'Dead') + '<br />Neighbors: ' + cellInfo.neighbors);
+				}
+			}
+		});
+
+		canvas.bind('contextmenu', function(e) {
+			e.preventDefault();
+			return false;
+		});
+		
+		canvas.bind('mousedown', function(e) {
+			e = e || window.event; //window.event for IE
+			lastmousemove_mouse = getMouse(e, this);
+			mousedown = true;
+			mousebutton = e.which;
+			
+			e.preventDefault();
+			return false;
+		});
+		
+		canvas.bind('mouseup', function(e) {
+			mousedown = false;
+
+			lastmousemove_mouse = getMouse(e, this);
+			mousebutton = e.which;
+
+			if( !life.isPlaying() ) {
+				
+				setCellAtMouse(lastmousemove_mouse.mx, lastmousemove_mouse.my);
+			}
+
+			e.preventDefault();
+			return false;
+		});
+	}
+	
+</script>
+
+<style type="text/css">
+
+ 	button { 
+ 	 display: block; 
+ 	 width: 120px; 
+ 	} 
+ 		
+	.info-div {
+   	position: relative;
+   	height:80px;
+   	margin-bottom:10px;
+	}
+
+	.info-div span#tooltip {
+   	position: absolute;
+   	bottom: 0;
+   	margin-left:170px;
+	}
+	
+	.navlabel {
+		margin-right:15px;
+		margin-top:10px;
+	}
+	
+	.slider {
+		margin:5px 0px 5px 0px;
+	}
+	
+	.option-container {
+		font-family:Helvetica,'Times New Roman',Sans-Serif;
+		font-weight:bold; 
+		font-size:.70em;
+		margin-top:10px;
+		width:120px;
+		text-align:right;
+	}
+	
+ 	.colorpick-holder {
+ 		margin-top:10px;
+ 		display:inline-block;
+ 	}
+ 	
+ 	.header {
+ 		height:80px;
+ 		margin-left:155px;
+ 	}
+ 	
+ 	.tooltip {
+ 		text-align:left;
+ 		width:150px;
+ 	}
+ 	
+ 	.leftalign {
+ 		text-align:left;
+ 	}
+ 	
+ 	.centeralign {
+ 		text-align:center;
+ 	} 	
+ 	
+ 	#speed {
+ 		margin-left:5px;
+ 		width:120px;
+ 	}
+ 	
+	#game {
+		min-width:2000px;
+		overflow:hidden;
+	}
+	
+ 	#tooltip {
+ 		font-weight:normal;
+ 		margin-top:10px;
+ 		color:blue;
+ 	}
+ 	
+ 	#fps {
+ 		font-weight:normal;
+ 		margin-top:10px;
+ 		color:blue;
+ 	}
+
+	#canvas-div {
+		float:left;
+		margin:5px 0px 20px 0px;
+	}
+	
+	#navigation-pane {
+		float:left;
+ 	 	margin:5px 15px 15px 15px; 
+ 	 	vertical-align:top;
+ 	 	width:120px;
+	}
+	
+
+</style>
+
+</head>
+<body>
+
+	<div class="header">
+		<h1>Conway's Life</h1>
+	</div>
+	<div id="game">
+		
+		<div id="navigation-pane">
+			<div><button id="run-button">Run</button></div>
+			<div><button id="singlestep-button">Step</button></div>
+			<div><button id="reset-button">Reset</button></div>
+			<div><button id="savepattern-button">Save</button></div>
+			<div><button id="loadpattern-button">Load</button></div>
+			<div class="option-container">
+				<span class="navlabel">Cell Color:</span><div class="colorpick-holder"><input type="hidden" id="cell-color" name="cell-color" class="color-picker" size="6" value="#000000"/></div>
+				<div style="clear:both;"></div>
+				<span class="navlabel">Grid Color:</span><div class="colorpick-holder"><input type="hidden" id="grid-color" name="grid-color" class="color-picker" size="6" value="#808080"/></div>
+				<div style="clear:both;"></div>
+				<span class="navlabel">Background:</span><div class="colorpick-holder"><input type="hidden" id="background-color" name="background-color" class="color-picker" size="6" value="#FFFFFF"/></div>
+				<div style="clear:both;"></div>
+				<div class="navlabel">Speed:<span id="speed"></span></div>
+				<div id="slider" class="slider"></div>
+				<div class="tooltip" id="tooltip"></div>
+				<div class="leftalign fps" id="fps"></div>
+			</div>
+		</div>	
+		
+		<div id="canvas-div">
+		</div>
+		<div style="clear:both;"></div>
+		
+	</div>
+	<div><span style="position:relative;left:160px;top:-25px;font-size:.65em;font-style:italics;"><a href="www.bitwisemobile.com">BitwiseMobile.com</a></span></div>
+</body>
+</html>
